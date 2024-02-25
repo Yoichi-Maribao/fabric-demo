@@ -202,7 +202,7 @@ export default function Home() {
         imageUrl:
         {imageUrl && (
           <div style={{display: "inline-block", position: "relative"}} ref={canvasWrapperRef}>
-            <canvas ref={canvasRef}/>
+            <canvas ref={canvasRef}></canvas>
             {isTypingMode && (
               <textarea
                 style={{
