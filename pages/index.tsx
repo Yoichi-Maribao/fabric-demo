@@ -33,15 +33,86 @@ export const useGetImageUrl = ({ file }: Args) => {
   };
 };
 
+const resizeWidthHeight = ({target_length_px, w0, h0}: {
+  target_length_px: number,
+  w0: number,
+  h0: number,
+}) => {
+  //リサイズの必要がなければ元のwidth, heightを返す
+  const length = Math.max(w0, h0);
+  if(length <= target_length_px){
+    return{
+      flag: false,
+      w: w0,
+      h: h0
+    };
+  }
+  //リサイズの計算
+  let w1;
+  let h1;
+  if(w0 >= h0){
+    w1 = target_length_px;
+    h1 = h0 * target_length_px / w0;
+  }else{
+    w1 = w0 * target_length_px / h0;
+    h1 = target_length_px;
+  }
+  return {
+    flag: true,
+    w: w1,
+    h: h1
+  };
+}
+
+const renderCanvas = ({imageUrl, canvas, isMobile}: {imageUrl: string, canvas: fabric.Canvas, isMobile: boolean}) => {
+  fabric.Image.fromURL(imageUrl, (e) => {
+  if (e.width && e.height && canvas.width) {
+    if (isMobile) {
+      // モバイルの時はキャンバスに画像を合わせる
+      // const { w } = resizeWidthHeight({target_length_px: 1024, w0: e.width, h0: e.height})
+      e.scaleToWidth(canvas.width);
+      // e.scaleToHeight(h);
+      canvas.setBackgroundImage(e, () => canvas.renderAll())
+    } else {
+      // PCの時は画像にキャンバスの幅に合わせる
+      fabric.Image.fromURL(imageUrl, (img) => {
+        if (!img.width || !img.height) return;
+        canvas.setDimensions({width: img.width, height: img.height});
+        canvas.setBackgroundImage(img, () => canvas.renderAll(), {
+          
+        })
+      });
+    }
+  }
+})}
+
 export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [canvas, setCanvas] = useState<fabric.Canvas | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState<boolean>(false);
   const [isTypingMode, setIsTypingMode] = useState<boolean>(false);
+  const [ua, setUa] = useState<{
+    Mobile: {
+      0: boolean,
+      iPhone: boolean,
+      Android: boolean,
+    },
+    Tablet: boolean,
+    PC: boolean
+  
+  }>({
+    Mobile: {
+      0: false,
+      iPhone: false,
+      Android: false,
+    },
+    Tablet: false,
+    PC: false
+  });
+  
 
   const onChangeHandler = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.currentTarget?.files && e.currentTarget.files[0]) {
@@ -54,17 +125,40 @@ export default function Home() {
   const { imageUrl } = useGetImageUrl({ file: imageFile });
 
   useEffect(() => {
+    const u = window.navigator.userAgent.toLowerCase();
+    const mobile = {
+          0: (u.indexOf("windows") != -1 && u.indexOf("phone") != -1)
+          || u.indexOf("iphone") != -1
+          || u.indexOf("ipod") != -1
+          || (u.indexOf("android") != -1 && u.indexOf("mobile") != -1)
+          || (u.indexOf("firefox") != -1 && u.indexOf("mobile") != -1)
+          || u.indexOf("blackberry") != -1,
+          iPhone: (u.indexOf("iphone") != -1),
+          Android: (u.indexOf("android") != -1 && u.indexOf("mobile") != -1)
+    };
+    const tablet = (u.indexOf("windows") != -1 && u.indexOf("touch") != -1)
+          || u.indexOf("ipad") != -1
+          || (u.indexOf("android") != -1 && u.indexOf("mobile") == -1)
+          || (u.indexOf("firefox") != -1 && u.indexOf("tablet") != -1)
+          || u.indexOf("kindle") != -1
+          || u.indexOf("silk") != -1
+          || u.indexOf("playbook") != -1;
+    const pc = !mobile[0] && !tablet;
+    setUa({
+    Mobile: mobile,
+    Tablet: tablet,
+    PC: pc
+    });
+  }, [])
+
+  useEffect(() => {
     if (imageUrl) {
       const _canvas = new fabric.Canvas(canvasRef.current);
-
-      _canvas.setBackgroundImage(imageUrl, (e: HTMLImageElement) => {
-        _canvas.setDimensions({width: e.width, height: e.height})
-        _canvas.renderAll()
-      })
+      renderCanvas({imageUrl, canvas: _canvas, isMobile: ua.Mobile[0]});
 
       setCanvas(_canvas);
     }
-  }, [imageUrl])
+  }, [imageUrl, ua.Mobile])
 
   const clickDownloadImageHandler = () => {
     if (canvas) {
@@ -77,10 +171,7 @@ export default function Home() {
     if (canvas) {
       canvas.clear();
       console.log(imageUrl)
-      canvas.setBackgroundImage(imageUrl, (e: HTMLImageElement) => {
-        canvas.setDimensions({width: e.width, height: e.height})
-        canvas.renderAll()
-      })
+      renderCanvas({imageUrl, canvas, isMobile: ua.Mobile[0]})
     }
   }
 
@@ -198,10 +289,10 @@ export default function Home() {
           onChange={onChangeHandler}
         />
       </div>
-      <p>
+      <div>
         imageUrl:
         {imageUrl && (
-          <div style={{display: "inline-block", position: "relative"}} ref={canvasWrapperRef}>
+          <div style={{display: "inline-block", position: "relative"}}>
             <canvas ref={canvasRef}></canvas>
             {isTypingMode && (
               <textarea
@@ -235,7 +326,7 @@ export default function Home() {
             <button onClick={() => clickDrawCrossHandler()}>✖</button>
           </div>
         )}
-      </p>
+      </div>
     </>
   );
 }
